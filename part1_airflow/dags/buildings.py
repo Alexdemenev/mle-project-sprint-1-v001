@@ -1,14 +1,16 @@
-# dags/churn.py
 
 import pendulum
 from airflow.decorators import dag, task
+from steps.messages import send_telegram_failure_message, send_telegram_success_message # импортируем функции для отправки сообщений
 
 
 @dag(
     schedule='@once',
     start_date=pendulum.datetime(2023, 1, 1, tz="UTC"),
     catchup=False,
-    tags=["ETL", "buildings"]
+    tags=["ETL", "buildings"],
+    on_failure_callback=send_telegram_failure_message,
+    on_success_callback=send_telegram_success_message
 )
 def prepare_buildings_dataset():
     import pandas as pd
@@ -21,26 +23,6 @@ def prepare_buildings_dataset():
 
         import sqlalchemy
         from sqlalchemy import inspect, MetaData, Table, Column, String, Integer, Float, Boolean, UniqueConstraint # дополните импорты необходимых типов колонок
-        """
-        id                     int64
-        build_year             int64
-        building_type_int      int64
-        latitude             float64
-        longitude            float64
-        ceiling_height       float64
-        flats_count            int64
-        floors_total           int64
-        has_elevator            bool
-        floor                  int64
-        is_apartment            bool
-        kitchen_area         float64
-        living_area          float64
-        rooms                  int64
-        studio                  bool
-        total_area           float64
-        price                  int64
-        building_id            int64
-        """
         
         hook = PostgresHook('destination_db')
         conn = hook.get_sqlalchemy_engine()
@@ -64,7 +46,7 @@ def prepare_buildings_dataset():
             Column('rooms', Integer),
             Column('studio', Boolean),
             Column('total_area', Float),
-            Column('price', Integer),
+            Column('price', Float),
             Column('building_id', Integer),
             UniqueConstraint('building_id', name='building_id_constraint')
         ) 
@@ -89,7 +71,7 @@ def prepare_buildings_dataset():
     @task()
     def transform(data: pd.DataFrame):
         data = data[(data['living_area'] + data['kitchen_area']) <= data['total_area']]
-        data.drop_duplicates(subset=list(data.drop(columns=['id']).columns), keep='first', inplace=True)
+        data.drop_duplicates(subset=list(data.columns), keep='first', inplace=True)
         return data
 
     @task()
