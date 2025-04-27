@@ -1,0 +1,66 @@
+schema: '2.0'
+stages:
+  get_data:
+    cmd: python scripts/data.py
+    deps:
+    - path: scripts/data.py
+      hash: md5
+      md5: 808d6822d22577aa8095295e6a41ea6b
+      size: 1493
+    params:
+      params.yaml:
+        index_col: id
+        retrain: true
+    outs:
+    - path: data/initial_data.csv
+      hash: md5
+      md5: 0719ee66cf3ea8cec930ad0faa61fd58
+      size: 2923635
+  fit_model:
+    cmd: python scripts/fit.py
+    deps:
+    - path: data/initial_data.csv
+      hash: md5
+      md5: 0719ee66cf3ea8cec930ad0faa61fd58
+      size: 2923635
+    - path: scripts/fit.py
+      hash: md5
+      md5: 5f37f3e2ee399d8485c7dd6346a023eb
+      size: 1932
+    params:
+      params.yaml:
+        index_col: id
+        one_hot_drop: if_binary
+        retrain: true
+        target_col: price
+    outs:
+    - path: models/fitted_model.pkl
+      hash: md5
+      md5: 59734c612e9fa80c01201cee763a6d68
+      size: 1121963
+  evaluate_model:
+    cmd: python scripts/evaluate.py
+    deps:
+    - path: models/fitted_model.pkl
+      hash: md5
+      md5: 59734c612e9fa80c01201cee763a6d68
+      size: 1121963
+    - path: scripts/evaluate.py
+      hash: md5
+      md5: 8c719f792cc52cd530981d74e27f523b
+      size: 1229
+    params:
+      params.yaml:
+        index_col: id
+        metrics:
+        - neg_mean_absolute_percentage_error
+        - neg_root_mean_squared_error
+        n_jobs: -1
+        n_splits: 5
+        retrain: true
+        target_col: price
+    outs:
+    - path: cv_results/cv_res.json
+      hash: md5
+      md5: ddf5094d81cfa052a44eabed033b87b4
+      size: 140
