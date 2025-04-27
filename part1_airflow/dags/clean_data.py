@@ -1,4 +1,3 @@
-
 import pendulum
 from airflow.decorators import dag, task
 from steps.messages import send_telegram_failure_message, send_telegram_success_message # импортируем функции для отправки сообщений
@@ -8,27 +7,24 @@ from steps.messages import send_telegram_failure_message, send_telegram_success_
     schedule='@once',
     start_date=pendulum.datetime(2023, 1, 1, tz="UTC"),
     catchup=False,
-    tags=["ETL", "buildings"],
+    tags=["clean_data", "buildings"],
     on_failure_callback=send_telegram_failure_message,
     on_success_callback=send_telegram_success_message
 )
-def prepare_buildings_dataset():
+def clean_buildings_dataset():
     import pandas as pd
     import numpy as np
     from airflow.providers.postgres.hooks.postgres import PostgresHook
-    
-    
     @task()
-    def create_table() -> None:
-
-        import sqlalchemy
-        from sqlalchemy import inspect, MetaData, Table, Column, String, Integer, Float, Boolean, UniqueConstraint # дополните импорты необходимых типов колонок
-        
+    def create_table():
+        from sqlalchemy import Table, Column, Float, Integer, Boolean, MetaData, UniqueConstraint, inspect
         hook = PostgresHook('destination_db')
-        conn = hook.get_sqlalchemy_engine()
+        db_engine = hook.get_sqlalchemy_engine()
+
         metadata = MetaData()
+
         buildings_table = Table(
-            'buildings_full',
+            'buildings_clean',
             metadata,
             Column('id', Integer, primary_key=True, autoincrement=True),
             Column('build_year', Integer),
@@ -48,21 +44,16 @@ def prepare_buildings_dataset():
             Column('total_area', Float),
             Column('price', Float),
             Column('building_id', Integer),
-            UniqueConstraint('building_id', name='building_id_constraint')
+            UniqueConstraint('building_id', name='building_id_clean_constraint')
         ) 
-
-        if not inspect(conn).has_table(buildings_table.name): 
-            metadata.create_all(conn)
-
-
+        if not inspect(db_engine).has_table(buildings_table.name):
+            metadata.create_all(db_engine)
     @task()
-    def extract(**kwargs):
-
+    def extract():
         hook = PostgresHook('destination_db')
         conn = hook.get_conn()
         sql = f"""
-        select * from buildings b 
-        left join flats f on b.id = f.building_id
+        select * from buildings_full
         """
         data = pd.read_sql(sql, conn).drop(columns=['id'])
         conn.close()
@@ -70,23 +61,43 @@ def prepare_buildings_dataset():
 
     @task()
     def transform(data: pd.DataFrame):
-        data = data[(data['living_area'] + data['kitchen_area']) <= data['total_area']]
-        data.drop_duplicates(subset=list(data.columns), keep='first', inplace=True)
+        
+        # удаляем выбросы
+        num_cols = data.drop(columns=['building_type_int', 'building_id']).select_dtypes(['float', 'int']).columns
+        threshold = 3
+        potential_outliers = pd.DataFrame()
+
+        for col in num_cols:
+            Q1 = data[col].quantile(0.25)
+            Q3 = data[col].quantile(0.75)
+            IQR = Q3 - Q1
+            margin = threshold*IQR
+            lower = Q1 - margin
+            upper = Q3 + margin 
+            potential_outliers[col] = ~data[col].between(lower, upper)
+
+        outliers = potential_outliers.any(axis=1)
+
+        data = data[~outliers]
+        data = data[data['building_type_int'] != 5] # удаляем, т.к. таких типов всего несколько
+        
         return data
 
     @task()
     def load(data: pd.DataFrame):
         hook = PostgresHook('destination_db')
+
         hook.insert_rows(
-            table="buildings_full",
+            table='buildings_clean',
             replace=True,
             target_fields=data.columns.tolist(),
             replace_index=['building_id'],
             rows=data.values.tolist()
-        )
-
+    )
+    
     create_table()
     data = extract()
     transformed_data = transform(data)
     load(transformed_data)
-prepare_buildings_dataset()
+
+clean_buildings_dataset()
