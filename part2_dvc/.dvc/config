@@ -1,5 +1,7 @@
+[core]
+    remote = s3_storage
 ['remote "s3_storage"']
     url = s3://s3-student-mle-20250329-2e5319257f
-    credentialpath = ../../.env
+    credentialpath = ../.env
     endpointurl = https://storage.yandexcloud.net
     version_aware = True
