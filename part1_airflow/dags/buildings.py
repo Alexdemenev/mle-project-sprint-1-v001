@@ -71,7 +71,7 @@ def prepare_buildings_dataset():
     @task()
     def transform(data: pd.DataFrame):
         data = data[(data['living_area'] + data['kitchen_area']) <= data['total_area']]
-        data.drop_duplicates(subset=list(data.columns), keep='first', inplace=True)
+        
         return data
 
     @task()
