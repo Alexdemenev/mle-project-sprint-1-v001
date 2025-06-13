@@ -4,7 +4,7 @@ import os
 
 def send_telegram_failure_message(context):
     
-    hook = TelegramHook(token='7987871770:AAHovyJvZ3y_NOTVNyMBl9ZQrBHu6pF5BlM', chat_id='-4718420948')
+    hook = TelegramHook(token='YOUR_TOKEN', chat_id='YOUR_CHAT_ID')
     
     dag = context['dag'].dag_id  # используем .dag_id для получения имени DAG
     run_id = context['run_id']
@@ -18,7 +18,7 @@ def send_telegram_failure_message(context):
     })
 
 def send_telegram_success_message(context):
-    hook = TelegramHook(token='7987871770:AAHovyJvZ3y_NOTVNyMBl9ZQrBHu6pF5BlM', chat_id='-4718420948')
+    hook = TelegramHook(token='YOUR_TOKEN', chat_id='YOUR_CHAT_ID')
     
     dag = context['dag'].dag_id
     run_id = context['run_id']
@@ -26,6 +26,6 @@ def send_telegram_success_message(context):
     message = f'Исполнение DAG {dag} с id={run_id} прошло успешно!'
     
     hook.send_message({
-        'chat_id': '-4718420948',
+        'chat_id': 'YOUR_CHAT_ID',
         'text': message
     })
